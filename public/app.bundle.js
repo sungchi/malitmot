@@ -385,6 +385,7 @@ function generatePuzzle(candidates, seed, options = {}) {
 
 const app = document.querySelector('#app');
 const HELP_STORAGE_KEY = 'malitmot:help:v1:seen';
+const SHARE_URL = 'https://plan9.kr/malitmot';
 
 const state = {
   candidates: [],
@@ -400,6 +401,7 @@ const state = {
   feedback: '선을 이어 단어를 찾아보세요.',
   feedbackTone: 'idle',
   burst: null,
+  toast: null,
   helpOpen: false,
   foundOpen: false,
 };
@@ -465,6 +467,70 @@ function openFound() {
 function closeFound() {
   state.foundOpen = false;
   render();
+}
+
+function resultShareText() {
+  return `말잇못 #${state.seed} ${foundCount()}개 찾음 ${SHARE_URL}`;
+}
+
+function shouldUseNativeShare() {
+  const userAgent = navigator.userAgent ?? '';
+  const isiPadDesktopMode = /Macintosh/i.test(userAgent) && navigator.maxTouchPoints > 1;
+  return typeof navigator.share === 'function'
+    && (/Android|iPhone|iPad|iPod/i.test(userAgent) || isiPadDesktopMode);
+}
+
+function fallbackCopy(text) {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  textarea.style.top = '0';
+  document.body.append(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  textarea.remove();
+  if (!copied) throw new Error('clipboard copy failed');
+}
+
+async function copyShareText(text) {
+  if (navigator.clipboard?.writeText && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  fallbackCopy(text);
+}
+
+function showToast(message) {
+  const id = Date.now();
+  state.toast = { id, message };
+  render();
+  window.setTimeout(() => {
+    if (state.toast?.id !== id) return;
+    state.toast = null;
+    document.querySelector('.toast')?.remove();
+  }, 1900);
+}
+
+async function shareResult() {
+  const text = resultShareText();
+
+  if (shouldUseNativeShare()) {
+    try {
+      await navigator.share({ text });
+      return;
+    } catch (error) {
+      if (error?.name === 'AbortError') return;
+    }
+  }
+
+  try {
+    await copyShareText(text);
+    showToast('결과를 클립보드에 복사했어요.');
+  } catch {
+    showToast('복사하지 못했어요. 다시 시도해 주세요.');
+  }
 }
 
 function startCurrentPuzzle() {
@@ -656,6 +722,9 @@ function bindControlEvents() {
   const openHelpButton = document.querySelector('[data-open-help]');
   openHelpButton?.addEventListener('click', openHelp);
 
+  const shareButton = document.querySelector('[data-share-result]');
+  shareButton?.addEventListener('click', shareResult);
+
   const openFoundButton = document.querySelector('[data-open-found]');
   openFoundButton?.addEventListener('click', openFound);
 
@@ -840,6 +909,7 @@ function render() {
         </div>
         <div class="top-actions">
           <button type="button" class="icon-button help-button" data-open-help aria-label="게임방법 열기">?</button>
+          <button type="button" class="share-button" data-share-result aria-label="결과 공유">결과공유</button>
           <div class="timer" aria-label="${hasNewPuzzle ? '새 게임 준비됨' : '다음 게임까지 남은 시간'}">
             <span>${hasNewPuzzle ? '새 게임' : '다음 게임'}</span>
             <strong data-next-timer>${hasNewPuzzle ? '준비됨' : formatDuration(secondsUntilNextHour(new Date()))}</strong>
@@ -907,6 +977,7 @@ function render() {
         <span>기본모드</span>
       </footer>
 
+      ${state.toast ? `<div class="toast" role="status" aria-live="polite">${state.toast.message}</div>` : ''}
       ${state.helpOpen ? helpDialog() : ''}
       ${state.foundOpen ? foundDialog(found) : ''}
     </main>

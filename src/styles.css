@@ -82,11 +82,34 @@ button {
 }
 
 .icon-button:focus-visible,
+.share-button:focus-visible,
 .primary-button:focus-visible,
 .found-summary button:focus-visible,
 .new-game-banner button:focus-visible {
   outline: 2px solid var(--fg);
   outline-offset: 2px;
+}
+
+.share-button {
+  display: grid;
+  place-items: center;
+  min-width: 70px;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.share-button:active,
+.icon-button:active {
+  background: var(--soft);
 }
 
 h1,
@@ -524,6 +547,26 @@ h1 {
   padding-bottom: 4px;
 }
 
+.toast {
+  position: fixed;
+  z-index: 30;
+  left: 50%;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  width: max-content;
+  max-width: calc(100% - 32px);
+  padding: 10px 12px;
+  border: 2px solid var(--fg);
+  border-radius: var(--radius);
+  background: var(--fg);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.3;
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: toast 1900ms ease forwards;
+}
+
 .loading,
 .error {
   margin: auto 0;
@@ -746,6 +789,22 @@ h1 {
   }
 }
 
+@keyframes toast {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  12%,
+  82% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+}
+
 @media (min-width: 760px) {
   body {
     background:
@@ -784,6 +843,13 @@ h1 {
   .icon-button {
     width: 34px;
     height: 34px;
+  }
+
+  .share-button {
+    min-width: 62px;
+    height: 34px;
+    padding: 0 7px;
+    font-size: 11px;
   }
 
   .timer {
