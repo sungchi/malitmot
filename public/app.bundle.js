@@ -88,11 +88,16 @@ function hasTenseOrAspirated(word) {
 const BOARD_SIZE = 5;
 const BOARD_CELLS = BOARD_SIZE * BOARD_SIZE;
 const MIN_PLAYABLE_ANSWERS = 20;
-const SEED_WORD_COUNT = 20;
+const SEED_WORD_BATCH_SIZE = 10;
+const SEED_WORD_BATCH_COUNT = 3;
+const SEED_WORD_COUNT = SEED_WORD_BATCH_SIZE * SEED_WORD_BATCH_COUNT;
 const GOAL_COUNT = 10;
 const MIN_ANSWER_SYLLABLES = 3;
 const MAX_ANSWER_SYLLABLES = 6;
-const GENERATOR_VERSION = 'malitmot-hourly-v3';
+const MIN_CORE_LONG_ANSWERS = 3;
+const GENERATOR_VERSION = 'malitmot-hourly-v4';
+
+const MIXED_LENGTH_PATTERN = [3, 4, 3, 5, 3, 4, 3, 6, 4, 5];
 
 const NEIGHBORS = Array.from({ length: BOARD_CELLS }, (_, index) => {
   const row = Math.floor(index / BOARD_SIZE);
@@ -185,6 +190,73 @@ function addCost(board, entry) {
   return { cost, total: syllables.size };
 }
 
+function entryLength(entry) {
+  return entry.syllables.length;
+}
+
+function syllableSet(entries) {
+  const syllables = new Set();
+  for (const entry of entries) {
+    for (const syllable of entry.syllables) {
+      syllables.add(syllable);
+    }
+  }
+  return syllables;
+}
+
+function overlapCount(entry, syllables) {
+  if (!syllables) return 0;
+  return entry.syllables.reduce((count, syllable) => count + (syllables.has(syllable) ? 1 : 0), 0);
+}
+
+function seedAffinity(seedWords) {
+  if (seedWords.length < SEED_WORD_BATCH_SIZE) return null;
+  const sourceCount = seedWords.length < SEED_WORD_BATCH_SIZE * 2
+    ? SEED_WORD_BATCH_SIZE
+    : SEED_WORD_BATCH_SIZE * 2;
+  return syllableSet(seedWords.slice(0, sourceCount));
+}
+
+function pickSeedWord(board, baseOrder, seedWords, usedWords, rng) {
+  const affinity = seedAffinity(seedWords);
+  const preferredLength = MIXED_LENGTH_PATTERN[seedWords.length % MIXED_LENGTH_PATTERN.length];
+  const choices = [];
+  const offset = Math.floor(rng() * baseOrder.length);
+
+  for (let count = 0; count < baseOrder.length; count += 1) {
+    const entry = baseOrder[(offset + count) % baseOrder.length];
+    if (usedWords.has(entry.word)) continue;
+
+    const overlap = overlapCount(entry, affinity);
+    if (affinity && overlap === 0) continue;
+
+    const { cost, total } = addCost(board, entry);
+    if (total > BOARD_CELLS) continue;
+    if (cost > 4 && seedWords.length > 4) continue;
+
+    const placed = placeWord(board, entry, rng);
+    if (!placed) continue;
+
+    choices.push({ entry, placed, cost, overlap });
+    if (choices.length >= 220) break;
+  }
+
+  if (choices.length === 0) return null;
+
+  choices.sort((a, b) => {
+    const aLengthMatch = entryLength(a.entry) === preferredLength ? 0 : 1;
+    const bLengthMatch = entryLength(b.entry) === preferredLength ? 0 : 1;
+    return aLengthMatch - bLengthMatch
+      || a.cost - b.cost
+      || b.overlap - a.overlap
+      || b.entry.frequencyScore - a.entry.frequencyScore
+      || a.entry.word.localeCompare(b.entry.word, 'ko');
+  });
+
+  const window = choices.slice(0, Math.min(18, choices.length));
+  return window[Math.floor(rng() * window.length)];
+}
+
 function placeWord(board, entry, rng = Math.random) {
   const fixed = new Map();
   board.forEach((syllable, index) => {
@@ -263,7 +335,68 @@ function findPlayableAnswers(entriesOrWords, board) {
   }
 
   return playable
-    .sort((a, b) => a.syllables.length - b.syllables.length || a.word.localeCompare(b.word, 'ko'));
+    .sort((a, b) => a.word.localeCompare(b.word, 'ko'));
+}
+
+function pickFallbackLength(groups, previousLength) {
+  const available = [...groups.entries()]
+    .filter(([, entries]) => entries.length > 0)
+    .map(([length, entries]) => ({ length, count: entries.length }));
+  if (available.length === 0) return null;
+
+  const nonRepeating = available.filter((group) => group.length !== previousLength);
+  const candidates = nonRepeating.length > 0 ? nonRepeating : available;
+  candidates.sort((a, b) => b.count - a.count || a.length - b.length);
+  return candidates[0].length;
+}
+
+function orderPlayableAnswers(entries) {
+  const groups = new Map();
+  for (const entry of entries) {
+    const length = entryLength(entry);
+    if (!groups.has(length)) groups.set(length, []);
+    groups.get(length).push(entry);
+  }
+
+  for (const group of groups.values()) {
+    group.sort((a, b) => a.word.localeCompare(b.word, 'ko'));
+  }
+
+  const ordered = [];
+  let previousLength = null;
+
+  while (ordered.length < entries.length) {
+    let moved = false;
+
+    for (const preferredLength of MIXED_LENGTH_PATTERN) {
+      let length = preferredLength;
+      if (!groups.get(length)?.length) {
+        length = pickFallbackLength(groups, previousLength);
+      }
+      if (length === null) break;
+
+      const entry = groups.get(length).shift();
+      ordered.push(entry);
+      previousLength = length;
+      moved = true;
+
+      if (ordered.length === entries.length) break;
+    }
+
+    if (!moved) break;
+  }
+
+  return ordered;
+}
+
+function hasMixedCoreAnswers(entries) {
+  if (entries.length < GOAL_COUNT) return false;
+  const longAnswerCount = entries.filter((entry) => entryLength(entry) >= 4).length;
+  if (longAnswerCount < MIN_CORE_LONG_ANSWERS) return false;
+
+  const core = entries.slice(0, GOAL_COUNT);
+  const coreLongAnswerCount = core.filter((entry) => entryLength(entry) >= 4).length;
+  return coreLongAnswerCount >= MIN_CORE_LONG_ANSWERS;
 }
 
 function answerMeta(word, index) {
@@ -321,47 +454,19 @@ function generatePuzzle(candidates, seed, options = {}) {
     .filter((entry) => entry.syllables.length >= MIN_ANSWER_SYLLABLES && entry.syllables.length <= MAX_ANSWER_SYLLABLES);
   const syllablePool = entries.filter((entry) => entry.syllables.length <= BOARD_CELLS);
   const minPlayableAnswers = options.minPlayableAnswers ?? MIN_PLAYABLE_ANSWERS;
-  const maxAttempts = options.maxAttempts ?? 90;
+  const maxAttempts = options.maxAttempts ?? 140;
   const rng = createRng(`${seed}:${GENERATOR_VERSION}`);
-  const startPool = shuffle(placementPool, rng).slice(0, 160);
   const baseOrder = shuffle(placementPool, rng);
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     let board = Array(BOARD_CELLS).fill(null);
     const seedWords = [];
     const usedWords = new Set();
-    const first = startPool[attempt % startPool.length] ?? baseOrder[attempt % baseOrder.length];
-    const firstPlacement = placeWord(board, first, rng);
-
-    if (!firstPlacement) continue;
-    board = firstPlacement.board;
-    seedWords.push(first);
-    usedWords.add(first.word);
 
     while (seedWords.length < SEED_WORD_COUNT) {
-      const choices = [];
-      const offset = Math.floor(rng() * baseOrder.length);
+      const pick = pickSeedWord(board, baseOrder, seedWords, usedWords, rng);
+      if (!pick) break;
 
-      for (let count = 0; count < baseOrder.length; count += 1) {
-        const entry = baseOrder[(offset + count) % baseOrder.length];
-        if (usedWords.has(entry.word)) continue;
-
-        const { cost, total } = addCost(board, entry);
-        if (total > BOARD_CELLS) continue;
-        if (cost > 4 && seedWords.length > 4) continue;
-
-        const placed = placeWord(board, entry, rng);
-        if (!placed) continue;
-
-        choices.push({ entry, placed, cost });
-        if (choices.length >= 120) break;
-      }
-
-      if (choices.length === 0) break;
-
-      choices.sort((a, b) => a.cost - b.cost || b.entry.frequencyScore - a.entry.frequencyScore);
-      const window = choices.slice(0, Math.min(16, choices.length));
-      const pick = window[Math.floor(rng() * window.length)];
       board = pick.placed.board;
       seedWords.push(pick.entry);
       usedWords.add(pick.entry.word);
@@ -370,10 +475,16 @@ function generatePuzzle(candidates, seed, options = {}) {
     if (seedWords.length !== SEED_WORD_COUNT) continue;
 
     board = fillBoard(board, syllablePool, rng);
-    const playableAnswers = findPlayableAnswers(answerEntries, board)
-      .filter((entry) => entry.syllables.length >= MIN_ANSWER_SYLLABLES && entry.syllables.length <= MAX_ANSWER_SYLLABLES);
+    const playableAnswers = orderPlayableAnswers(
+      findPlayableAnswers(answerEntries, board)
+        .filter((entry) => entry.syllables.length >= MIN_ANSWER_SYLLABLES && entry.syllables.length <= MAX_ANSWER_SYLLABLES),
+    );
 
-    if (new Set(board).size === BOARD_CELLS && playableAnswers.length >= minPlayableAnswers) {
+    if (
+      new Set(board).size === BOARD_CELLS
+      && playableAnswers.length >= minPlayableAnswers
+      && hasMixedCoreAnswers(playableAnswers)
+    ) {
       return {
         seed,
         generatorVersion: GENERATOR_VERSION,
