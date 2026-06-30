@@ -228,6 +228,8 @@ h1 {
 .board-wrap {
   position: relative;
   padding: 8px;
+  touch-action: none;
+  overscroll-behavior: contain;
 }
 
 .board {
@@ -237,6 +239,7 @@ h1 {
   gap: 8px;
   aspect-ratio: 1;
   max-height: min(72svh, 430px);
+  touch-action: none;
 }
 
 .board-lines {
@@ -279,6 +282,7 @@ h1 {
   font-weight: 900;
   line-height: 1;
   cursor: pointer;
+  touch-action: none;
   transition:
     transform 120ms ease,
     background 120ms ease,

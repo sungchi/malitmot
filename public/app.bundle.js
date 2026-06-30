@@ -585,6 +585,7 @@ function tileFromPoint(clientX, clientY) {
 
 function handlePointerMove(event) {
   if (!state.pointerActive) return;
+  event.preventDefault();
   const point = { x: event.clientX, y: event.clientY };
   const tile = tileFromPoint(event.clientX, event.clientY);
   if (tile) {
@@ -595,7 +596,8 @@ function handlePointerMove(event) {
   }
 }
 
-function handlePointerUp() {
+function handlePointerUp(event) {
+  event.preventDefault();
   submitSelection();
   window.removeEventListener('pointermove', handlePointerMove);
   window.removeEventListener('pointerup', handlePointerUp);
@@ -608,10 +610,10 @@ function bindTileEvents() {
       event.preventDefault();
       tile.setPointerCapture?.(event.pointerId);
       beginSelection(Number(tile.dataset.cell), { x: event.clientX, y: event.clientY });
-      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointermove', handlePointerMove, { passive: false });
       window.addEventListener('pointerup', handlePointerUp);
       window.addEventListener('pointercancel', handlePointerUp);
-    });
+    }, { passive: false });
   });
 }
 
