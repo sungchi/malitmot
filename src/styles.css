@@ -38,6 +38,27 @@ body {
   user-select: none;
 }
 
+.ad-banner {
+  width: min(300px, calc(100% - 32px));
+  aspect-ratio: 6 / 5;
+  margin: 0 auto max(18px, env(safe-area-inset-bottom));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--soft);
+}
+
+.ad-banner a,
+.ad-banner img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ad-banner img {
+  object-fit: contain;
+}
+
 button {
   font: inherit;
 }
