@@ -65,7 +65,6 @@ button {
 
 .shell {
   width: min(100%, 460px);
-  min-height: 100svh;
   margin: 0 auto;
   padding: max(16px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom));
   display: flex;
@@ -105,7 +104,14 @@ button {
   font-size: 18px;
   font-weight: 900;
   line-height: 1;
+  text-decoration: none;
   cursor: pointer;
+}
+
+.discord-button svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
 }
 
 .icon-button:focus-visible,
@@ -837,7 +843,7 @@ h1 {
 
   .shell {
     padding-top: 24px;
-    padding-bottom: 24px;
+    padding-bottom: 12px;
   }
 }
 
@@ -866,26 +872,31 @@ h1 {
   }
 
   .icon-button {
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
+  }
+
+  .discord-button svg {
+    width: 18px;
+    height: 18px;
   }
 
   .share-button {
-    min-width: 62px;
-    height: 34px;
-    padding: 0 7px;
+    min-width: 54px;
+    height: 32px;
+    padding: 0 6px;
     font-size: 11px;
   }
 
   .timer {
-    min-width: 108px;
-    height: 34px;
-    padding-left: 7px;
-    padding-right: 7px;
+    min-width: 92px;
+    height: 32px;
+    padding-left: 6px;
+    padding-right: 6px;
   }
 
   .timer strong {
-    font-size: 16px;
+    font-size: 14px;
   }
 
   .new-game-banner {
