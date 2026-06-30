@@ -80,6 +80,8 @@ const BOARD_CELLS = BOARD_SIZE * BOARD_SIZE;
 const MIN_PLAYABLE_ANSWERS = 20;
 const SEED_WORD_COUNT = 20;
 const GOAL_COUNT = 10;
+const MIN_ANSWER_SYLLABLES = 3;
+const MAX_ANSWER_SYLLABLES = 6;
 const GENERATOR_VERSION = 'malitmot-hourly-v3';
 
 const NEIGHBORS = Array.from({ length: BOARD_CELLS }, (_, index) => {
@@ -304,12 +306,14 @@ function generatePuzzle(candidates, seed, options = {}) {
     ? (typeof options.answerCandidates[0] === 'string' ? candidateEntries(options.answerCandidates) : options.answerCandidates)
     : entries;
   const placementLimit = options.placementLimit ?? 25000;
-  const placementPool = entries.slice(0, placementLimit).filter((entry) => entry.syllables.length >= 2 && entry.syllables.length <= 6);
+  const placementPool = entries
+    .slice(0, placementLimit)
+    .filter((entry) => entry.syllables.length >= MIN_ANSWER_SYLLABLES && entry.syllables.length <= MAX_ANSWER_SYLLABLES);
   const syllablePool = entries.filter((entry) => entry.syllables.length <= BOARD_CELLS);
   const minPlayableAnswers = options.minPlayableAnswers ?? MIN_PLAYABLE_ANSWERS;
   const maxAttempts = options.maxAttempts ?? 90;
   const rng = createRng(`${seed}:${GENERATOR_VERSION}`);
-  const startPool = shuffle(placementPool.filter((entry) => entry.syllables.length >= 3), rng).slice(0, 160);
+  const startPool = shuffle(placementPool, rng).slice(0, 160);
   const baseOrder = shuffle(placementPool, rng);
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -356,7 +360,8 @@ function generatePuzzle(candidates, seed, options = {}) {
     if (seedWords.length !== SEED_WORD_COUNT) continue;
 
     board = fillBoard(board, syllablePool, rng);
-    const playableAnswers = findPlayableAnswers(answerEntries, board);
+    const playableAnswers = findPlayableAnswers(answerEntries, board)
+      .filter((entry) => entry.syllables.length >= MIN_ANSWER_SYLLABLES && entry.syllables.length <= MAX_ANSWER_SYLLABLES);
 
     if (new Set(board).size === BOARD_CELLS && playableAnswers.length >= minPlayableAnswers) {
       return {
@@ -555,8 +560,8 @@ function submitSelection() {
   const word = currentWord();
   const answers = answerMap();
 
-  if (word.length < 2) {
-    state.feedback = '두 글자 이상 이어주세요.';
+  if (word.length < MIN_ANSWER_SYLLABLES || word.length > MAX_ANSWER_SYLLABLES) {
+    state.feedback = `${MIN_ANSWER_SYLLABLES}~${MAX_ANSWER_SYLLABLES}음절 단어를 이어주세요.`;
     state.feedbackTone = 'bad';
   } else if (!answers.has(word)) {
     state.feedback = `${word}은(는) 보드에서 찾을 수 있는 사전 단어가 아니에요.`;
@@ -755,7 +760,7 @@ function helpDialog() {
         <ul class="help-list">
           <li>상하좌우와 대각선으로 붙은 글자를 이어요.</li>
           <li>한 단어 안에서 같은 칸은 한 번만 쓸 수 있어요.</li>
-          <li>두 글자 이상, 사전에 있는 단어만 정답이에요.</li>
+          <li>3~6음절, 사전에 있는 단어만 정답이에요.</li>
           <li>10개를 찾으면 목표 달성, 이후 정답은 보너스로 쌓여요.</li>
           <li>한 시간마다 새 판이 준비되고, 원할 때 시작할 수 있어요.</li>
         </ul>
