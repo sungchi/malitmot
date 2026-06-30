@@ -241,26 +241,6 @@ h1 {
   cursor: pointer;
 }
 
-.current-word {
-  min-height: 54px;
-  padding: 10px 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.current-word strong {
-  display: block;
-  min-width: 0;
-  width: 100%;
-  text-align: center;
-  font-size: 30px;
-  line-height: 1.1;
-  word-break: keep-all;
-}
-
 .board-wrap {
   position: relative;
   padding: 8px;
@@ -849,10 +829,6 @@ h1 {
 
   .board {
     gap: 6px;
-  }
-
-  .current-word strong {
-    font-size: 25px;
   }
 
   .topbar {

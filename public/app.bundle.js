@@ -818,9 +818,6 @@ function renderLines() {
 }
 
 function renderBoardState() {
-  const word = document.querySelector('.current-word strong');
-  if (word) word.textContent = currentWord() || ' ';
-
   document.querySelectorAll('[data-cell]').forEach((tile) => {
     const index = Number(tile.dataset.cell);
     tile.classList.toggle('selected', state.selectedPath.includes(index));
@@ -944,10 +941,6 @@ function render() {
           <button type="button" data-start-ready>시작</button>
         </section>
       ` : ''}
-
-      <section class="current-word" aria-live="polite" aria-label="${complete ? '보너스 탐색 중인 단어' : '현재 연결한 단어'}">
-        <strong>${currentWord() || ' '}</strong>
-      </section>
 
       <section class="board-wrap ${state.burst ? 'success-pop' : ''} ${state.burst?.isBonus ? 'bonus-pop' : ''}" aria-label="${BOARD_SIZE}x${BOARD_SIZE} 말그물 보드">
         <div class="board">
