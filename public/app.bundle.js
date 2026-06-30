@@ -523,6 +523,19 @@ function showToast(message) {
   }, 1900);
 }
 
+function vibrate(pattern) {
+  if (typeof navigator.vibrate !== 'function') return;
+  try {
+    navigator.vibrate(pattern);
+  } catch {
+    // Unsupported or blocked haptics should never interrupt play.
+  }
+}
+
+function playSuccessHaptic(isBonus) {
+  vibrate(isBonus ? [18, 30, 22] : 18);
+}
+
 async function shareResult() {
   const text = resultShareText();
 
@@ -683,6 +696,7 @@ function submitSelection() {
     state.feedback = isBonus ? `${word} 보너스 정답!` : `${word} 찾았어요.`;
     state.feedbackTone = isBonus ? 'bonus' : 'good';
     state.burst = { word, isBonus, id: Date.now(), ...anchor };
+    playSuccessHaptic(isBonus);
   }
 
   clearSelection();
