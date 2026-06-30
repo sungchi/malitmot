@@ -1006,7 +1006,7 @@ function render() {
       state.burst = null;
       document.querySelector('.board-wrap')?.classList.remove('success-pop', 'bonus-pop');
       document.querySelectorAll('.flying-word, .success-ring, .success-sparks').forEach((element) => element.remove());
-    }, 900);
+    }, 1100);
   }
 }
 

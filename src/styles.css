@@ -453,13 +453,13 @@ h1 {
   border-radius: var(--radius);
   background: #fff;
   color: var(--fg);
-  font-size: 15px;
+  font-size: clamp(23px, 7vw, 36px);
   font-weight: 900;
-  line-height: 1.2;
+  line-height: 1;
   pointer-events: none;
   text-overflow: ellipsis;
   white-space: nowrap;
-  animation: wordFly 860ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  animation: wordFly 1000ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
 .flying-word.bonus {
@@ -723,9 +723,13 @@ h1 {
     opacity: 0;
     transform: translate(-50%, -30%) scale(0.9);
   }
-  18% {
+  14% {
     opacity: 1;
     transform: translate(-50%, -58%) scale(1.04);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(-50%, -88%) scale(1);
   }
   100% {
     opacity: 0;
