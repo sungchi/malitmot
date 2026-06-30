@@ -914,7 +914,7 @@ function render() {
   app.innerHTML = `
     <main class="shell">
       <header class="topbar">
-        <div>
+        <div class="brand">
           <h1>말잇못</h1>
         </div>
         <div class="top-actions">

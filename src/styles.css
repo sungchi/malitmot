@@ -66,6 +66,12 @@ button {
   gap: 8px;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+}
+
 .icon-button {
   display: grid;
   place-items: center;
@@ -119,6 +125,9 @@ p {
 }
 
 h1 {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
   font-size: 28px;
   line-height: 1;
   letter-spacing: 0;
@@ -848,6 +857,11 @@ h1 {
 
   .top-actions {
     gap: 6px;
+  }
+
+  .brand,
+  h1 {
+    min-height: 34px;
   }
 
   .icon-button {
