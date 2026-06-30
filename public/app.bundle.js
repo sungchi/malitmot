@@ -505,6 +505,35 @@ function currentWord() {
   return state.selectedPath.map((index) => state.puzzle.board[index]).join('');
 }
 
+function selectionAnchor(path = state.selectedPath) {
+  const board = document.querySelector('.board');
+  if (!board || path.length === 0) return { x: 50, y: 50 };
+
+  const boardRect = board.getBoundingClientRect();
+  const points = path
+    .map((index) => document.querySelector(`[data-cell="${index}"]`))
+    .filter(Boolean)
+    .map((tile) => {
+      const rect = tile.getBoundingClientRect();
+      return {
+        x: rect.left + rect.width / 2 - boardRect.left,
+        y: rect.top + rect.height / 2 - boardRect.top,
+      };
+    });
+
+  if (points.length === 0) return { x: 50, y: 50 };
+
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const x = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const y = (Math.min(...ys) + Math.max(...ys)) / 2;
+
+  return {
+    x: Math.min(92, Math.max(8, (x / boardRect.width) * 100)),
+    y: Math.min(92, Math.max(8, (y / boardRect.height) * 100)),
+  };
+}
+
 function isAdjacent(a, b) {
   const ar = Math.floor(a / BOARD_SIZE);
   const ac = a % BOARD_SIZE;
@@ -574,9 +603,10 @@ function submitSelection() {
     saveFound();
     const afterCount = foundCount();
     const isBonus = afterCount > GOAL_COUNT;
+    const anchor = selectionAnchor();
     state.feedback = isBonus ? `${word} 보너스 정답!` : `${word} 찾았어요.`;
     state.feedbackTone = isBonus ? 'bonus' : 'good';
-    state.burst = { word, isBonus, id: Date.now() };
+    state.burst = { word, isBonus, id: Date.now(), ...anchor };
   }
 
   clearSelection();
@@ -833,8 +863,7 @@ function render() {
         </section>
       ` : ''}
 
-      <section class="current-word" aria-live="polite">
-        <span>${complete ? '보너스 탐색' : '지금 잇는 말'}</span>
+      <section class="current-word" aria-live="polite" aria-label="${complete ? '보너스 탐색 중인 단어' : '현재 연결한 단어'}">
         <strong>${currentWord() || ' '}</strong>
       </section>
 
@@ -847,12 +876,12 @@ function render() {
             </button>
           `).join('')}
         </div>
-        ${state.burst ? `<div class="success-ring ${state.burst.isBonus ? 'bonus' : ''}" aria-hidden="true"></div>
-        <div class="success-sparks ${state.burst.isBonus ? 'bonus' : ''}" aria-hidden="true">
+        ${state.burst ? `<div class="success-ring ${state.burst.isBonus ? 'bonus' : ''}" style="--burst-x: ${state.burst.x}%; --burst-y: ${state.burst.y}%;" aria-hidden="true"></div>
+        <div class="success-sparks ${state.burst.isBonus ? 'bonus' : ''}" style="--burst-x: ${state.burst.x}%; --burst-y: ${state.burst.y}%;" aria-hidden="true">
           <span></span><span></span><span></span><span></span><span></span><span></span>
         </div>` : ''}
-        ${state.burst ? `<div class="burst ${state.burst.isBonus ? 'bonus' : ''}" key="${state.burst.id}">
-          ${state.burst.isBonus ? '+보너스 정답' : '정답'}
+        ${state.burst ? `<div class="flying-word ${state.burst.isBonus ? 'bonus' : ''}" style="--burst-x: ${state.burst.x}%; --burst-y: ${state.burst.y}%;" key="${state.burst.id}">
+          ${state.burst.word}
         </div>` : ''}
       </section>
 
@@ -893,7 +922,7 @@ function render() {
       if (state.burst?.id !== burstId) return;
       state.burst = null;
       document.querySelector('.board-wrap')?.classList.remove('success-pop', 'bonus-pop');
-      document.querySelectorAll('.burst, .success-ring, .success-sparks').forEach((element) => element.remove());
+      document.querySelectorAll('.flying-word, .success-ring, .success-sparks').forEach((element) => element.remove());
     }, 900);
   }
 }
