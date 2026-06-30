@@ -228,6 +228,7 @@ h1 {
 .board-wrap {
   position: relative;
   padding: 8px;
+  overflow: visible;
   touch-action: none;
   overscroll-behavior: contain;
 }
@@ -405,7 +406,7 @@ h1 {
 
 .burst {
   position: absolute;
-  z-index: 3;
+  z-index: 5;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
@@ -425,8 +426,94 @@ h1 {
   color: #fff;
 }
 
+.success-ring {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 50%;
+  width: 38%;
+  aspect-ratio: 1;
+  border: 3px solid var(--fg);
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.55);
+  animation: successRing 620ms ease-out forwards;
+}
+
+.success-ring.bonus {
+  border-width: 4px;
+}
+
+.success-sparks {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  top: 50%;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.success-sparks span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--fg);
+  border-radius: 999px;
+  background: #fff;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.7);
+  animation: successSpark 680ms ease-out forwards;
+}
+
+.success-sparks.bonus span {
+  background: var(--fg);
+}
+
+.success-sparks span:nth-child(1) {
+  --spark-x: -104px;
+  --spark-y: -84px;
+}
+
+.success-sparks span:nth-child(2) {
+  --spark-x: 92px;
+  --spark-y: -92px;
+  animation-delay: 25ms;
+}
+
+.success-sparks span:nth-child(3) {
+  --spark-x: 118px;
+  --spark-y: 8px;
+  animation-delay: 50ms;
+}
+
+.success-sparks span:nth-child(4) {
+  --spark-x: 70px;
+  --spark-y: 104px;
+  animation-delay: 75ms;
+}
+
+.success-sparks span:nth-child(5) {
+  --spark-x: -80px;
+  --spark-y: 92px;
+  animation-delay: 100ms;
+}
+
+.success-sparks span:nth-child(6) {
+  --spark-x: -118px;
+  --spark-y: 10px;
+  animation-delay: 125ms;
+}
+
+.success-pop .tile {
+  animation: answerPop 430ms ease;
+}
+
 .bonus-pop .tile {
-  animation: softPulse 420ms ease;
+  animation: answerPop 460ms ease, softPulse 520ms ease;
 }
 
 .meta {
@@ -592,6 +679,47 @@ h1 {
   }
   40% {
     transform: scale(1.025);
+  }
+}
+
+@keyframes successRing {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.55);
+  }
+  24% {
+    opacity: 0.48;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(2.25);
+  }
+}
+
+@keyframes successSpark {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.7);
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--spark-x)), calc(-50% + var(--spark-y))) scale(0.3);
+  }
+}
+
+@keyframes answerPop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  36% {
+    transform: scale(1.055);
+  }
+  68% {
+    transform: scale(0.985);
   }
 }
 

@@ -838,7 +838,7 @@ function render() {
         <strong>${currentWord() || ' '}</strong>
       </section>
 
-      <section class="board-wrap ${state.burst?.isBonus ? 'bonus-pop' : ''}" aria-label="${BOARD_SIZE}x${BOARD_SIZE} 말그물 보드">
+      <section class="board-wrap ${state.burst ? 'success-pop' : ''} ${state.burst?.isBonus ? 'bonus-pop' : ''}" aria-label="${BOARD_SIZE}x${BOARD_SIZE} 말그물 보드">
         <div class="board">
           <svg class="board-lines" aria-hidden="true"></svg>
           ${state.puzzle.board.map((syllable, index) => `
@@ -847,6 +847,10 @@ function render() {
             </button>
           `).join('')}
         </div>
+        ${state.burst ? `<div class="success-ring ${state.burst.isBonus ? 'bonus' : ''}" aria-hidden="true"></div>
+        <div class="success-sparks ${state.burst.isBonus ? 'bonus' : ''}" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>` : ''}
         ${state.burst ? `<div class="burst ${state.burst.isBonus ? 'bonus' : ''}" key="${state.burst.id}">
           ${state.burst.isBonus ? '+보너스 정답' : '정답'}
         </div>` : ''}
@@ -884,11 +888,13 @@ function render() {
   renderBoardState();
   window.requestAnimationFrame(renderLines);
   if (state.burst) {
+    const burstId = state.burst.id;
     window.setTimeout(() => {
+      if (state.burst?.id !== burstId) return;
       state.burst = null;
-      const burst = document.querySelector('.burst');
-      if (burst) burst.remove();
-    }, 850);
+      document.querySelector('.board-wrap')?.classList.remove('success-pop', 'bonus-pop');
+      document.querySelectorAll('.burst, .success-ring, .success-sparks').forEach((element) => element.remove());
+    }, 900);
   }
 }
 
