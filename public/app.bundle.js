@@ -62,6 +62,16 @@ function hasFinalConsonant(syllable) {
   return (code - 0xac00) % 28 !== 0;
 }
 
+function topicParticle(word) {
+  const syllables = toSyllables(word);
+  const last = syllables[syllables.length - 1];
+  return hasFinalConsonant(last) ? '은' : '는';
+}
+
+function withTopicParticle(word) {
+  return `${word}${topicParticle(word)}`;
+}
+
 function hasTenseOrAspirated(word) {
   const rareInitials = new Set([1, 4, 8, 10, 13, 14, 15, 16, 17]);
   return toSyllables(word).some((syllable) => {
@@ -659,10 +669,10 @@ function submitSelection() {
     state.feedback = `${MIN_ANSWER_SYLLABLES}~${MAX_ANSWER_SYLLABLES}음절 단어를 이어주세요.`;
     state.feedbackTone = 'bad';
   } else if (!answers.has(word)) {
-    state.feedback = `${word}은(는) 보드에서 찾을 수 있는 사전 단어가 아니에요.`;
+    state.feedback = `${withTopicParticle(word)} 보드에서 찾을 수 있는 사전 단어가 아니에요.`;
     state.feedbackTone = 'bad';
   } else if (state.found.has(word)) {
-    state.feedback = `${word}은(는) 이미 찾았어요.`;
+    state.feedback = `${withTopicParticle(word)} 이미 찾았어요.`;
     state.feedbackTone = 'idle';
   } else {
     state.found.add(word);
