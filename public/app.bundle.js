@@ -644,7 +644,7 @@ function vibrate(pattern) {
 }
 
 function playSuccessHaptic(isBonus) {
-  vibrate(isBonus ? [18, 30, 22] : 18);
+  vibrate(isBonus ? [55, 45, 70] : 55);
 }
 
 async function shareResult() {
