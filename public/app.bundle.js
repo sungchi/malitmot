@@ -920,9 +920,11 @@ function render() {
         <div class="top-actions">
           <button type="button" class="icon-button help-button" data-open-help aria-label="게임방법 열기">?</button>
           <button type="button" class="share-button" data-share-result aria-label="결과 공유">결과공유</button>
-          <div class="timer" aria-label="${hasNewPuzzle ? '새 게임 준비됨' : '다음 게임까지 남은 시간'}">
-            <span>${hasNewPuzzle ? '새 게임' : '다음 게임'}</span>
-            <strong data-next-timer>${hasNewPuzzle ? '준비됨' : formatDuration(secondsUntilNextHour(new Date()))}</strong>
+          <div class="timer-group" aria-label="${hasNewPuzzle ? '새 게임 준비됨' : '다음 게임까지 남은 시간'}">
+            <span class="timer-label">${hasNewPuzzle ? '새 게임' : '다음 게임'}</span>
+            <div class="timer">
+              <strong data-next-timer>${hasNewPuzzle ? '준비됨' : formatDuration(secondsUntilNextHour(new Date()))}</strong>
+            </div>
           </div>
         </div>
       </header>
