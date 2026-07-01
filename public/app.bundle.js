@@ -91,12 +91,13 @@ const MIN_PLAYABLE_ANSWERS = 20;
 const SEED_WORD_BATCH_SIZE = 10;
 const SEED_WORD_BATCH_COUNT = 3;
 const SEED_WORD_COUNT = SEED_WORD_BATCH_SIZE * SEED_WORD_BATCH_COUNT;
+const MIN_COMPLETED_SEED_WORDS = MIN_PLAYABLE_ANSWERS;
 const GOAL_COUNT = 10;
 const MIN_ANSWER_SYLLABLES = 3;
 const MAX_ANSWER_SYLLABLES = 6;
 const MIN_CORE_LONG_ANSWERS = 3;
 const MIN_FIRST_SEED_LONG_WORDS = 4;
-const GENERATOR_VERSION = 'malitmot-hourly-v8';
+const GENERATOR_VERSION = 'malitmot-hourly-v9';
 
 const MIXED_LENGTH_PATTERN = [3, 4, 3, 5, 3, 4, 3, 6, 4, 5];
 
@@ -217,9 +218,32 @@ function seedAffinity(seedWords) {
   return syllableSet(seedWords.slice(0, sourceCount));
 }
 
-function pickSeedWord(board, baseOrder, seedWords, usedWords, rng) {
-  const affinity = seedAffinity(seedWords);
+function firstSeedLongCount(seedWords) {
+  return seedWords
+    .slice(0, SEED_WORD_BATCH_SIZE)
+    .filter((entry) => entryLength(entry) >= 4)
+    .length;
+}
+
+function seedPickOptions(seedWords) {
   const preferredLength = MIXED_LENGTH_PATTERN[seedWords.length % MIXED_LENGTH_PATTERN.length];
+  if (seedWords.length >= SEED_WORD_BATCH_SIZE) return { preferredLength };
+
+  const remainingSlots = SEED_WORD_BATCH_SIZE - seedWords.length;
+  const remainingLongWords = MIN_FIRST_SEED_LONG_WORDS - firstSeedLongCount(seedWords);
+  const shouldForceLong = remainingLongWords > 0
+    && (preferredLength >= 4 || remainingLongWords >= remainingSlots);
+
+  return {
+    preferredLength,
+    minLength: shouldForceLong ? 4 : null,
+  };
+}
+
+function pickSeedWord(board, baseOrder, seedWords, usedWords, rng, options = {}) {
+  const affinity = seedAffinity(seedWords);
+  const preferredLength = options.preferredLength ?? MIXED_LENGTH_PATTERN[seedWords.length % MIXED_LENGTH_PATTERN.length];
+  const minLength = options.minLength ?? null;
   const choices = [];
   const offset = Math.floor(rng() * baseOrder.length);
   const maxChoices = seedWords.length < SEED_WORD_BATCH_SIZE ? 900 : 360;
@@ -227,6 +251,7 @@ function pickSeedWord(board, baseOrder, seedWords, usedWords, rng) {
   for (let count = 0; count < baseOrder.length; count += 1) {
     const entry = baseOrder[(offset + count) % baseOrder.length];
     if (usedWords.has(entry.word)) continue;
+    if (minLength && entryLength(entry) < minLength) continue;
 
     const overlap = overlapCount(entry, affinity);
     if (affinity && overlap === 0) continue;
@@ -542,6 +567,7 @@ function generatePuzzle(candidates, seed, options = {}) {
     .filter((entry) => entry.syllables.length >= MIN_ANSWER_SYLLABLES && entry.syllables.length <= MAX_ANSWER_SYLLABLES);
   const syllablePool = entries.filter((entry) => entry.syllables.length <= BOARD_CELLS);
   const minPlayableAnswers = options.minPlayableAnswers ?? MIN_PLAYABLE_ANSWERS;
+  const minSeedWords = options.minSeedWords ?? Math.min(SEED_WORD_COUNT, MIN_COMPLETED_SEED_WORDS, minPlayableAnswers);
   const maxAttempts = options.maxAttempts ?? 300;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (stats) stats.attempts = (stats.attempts ?? 0) + 1;
@@ -554,7 +580,7 @@ function generatePuzzle(candidates, seed, options = {}) {
 
     while (seedWords.length < SEED_WORD_COUNT) {
       const seedPool = seedWords.length < SEED_WORD_BATCH_SIZE ? baseCoreOrder : baseOrder;
-      const pick = pickSeedWord(board, seedPool, seedWords, usedWords, rng);
+      const pick = pickSeedWord(board, seedPool, seedWords, usedWords, rng, seedPickOptions(seedWords));
       if (!pick) break;
 
       board = pick.placed.board;
@@ -584,26 +610,43 @@ function generatePuzzle(candidates, seed, options = {}) {
       findPlayableAnswers(answerEntries, board)
         .filter((entry) => entry.syllables.length >= MIN_ANSWER_SYLLABLES && entry.syllables.length <= MAX_ANSWER_SYLLABLES),
     );
-    const boardAnswerWords = new Set(playableBoardAnswers.map((entry) => entry.word));
-    const playableBonusAnswers = orderPlayableAnswers(
-      findPlayableAnswers(bonusAnswerEntries, board)
-        .filter((entry) => entry.syllables.length >= MIN_ANSWER_SYLLABLES && entry.syllables.length <= MAX_ANSWER_SYLLABLES)
-        .filter((entry) => !boardAnswerWords.has(entry.word)),
-    );
     completeSeedWordsFromAnswers(seedWords, usedWords, playableBoardAnswers);
     if (stats) {
       stats.completedSeeds = (stats.completedSeeds ?? 0) + 1;
       stats.maxPlayableAnswers = Math.max(stats.maxPlayableAnswers ?? 0, playableBoardAnswers.length);
-      stats.maxBonusPlayableAnswers = Math.max(stats.maxBonusPlayableAnswers ?? 0, playableBonusAnswers.length);
+    }
+
+    const hasUniqueBoard = new Set(board).size === BOARD_CELLS;
+    const hasCompleteSeeds = seedWords.length >= minSeedWords;
+    const hasLongSeeds = hasLongFirstSeedBatch(seedWords);
+    const hasEnoughBoardAnswers = playableBoardAnswers.length >= minPlayableAnswers;
+    const hasMixedAnswers = hasMixedCoreAnswers(playableBoardAnswers);
+
+    if (stats) {
+      if (!hasUniqueBoard) stats.uniqueBoardFailures = (stats.uniqueBoardFailures ?? 0) + 1;
+      if (!hasCompleteSeeds) stats.completeSeedFailures = (stats.completeSeedFailures ?? 0) + 1;
+      if (!hasLongSeeds) stats.longSeedFailures = (stats.longSeedFailures ?? 0) + 1;
+      if (!hasEnoughBoardAnswers) stats.playableAnswerFailures = (stats.playableAnswerFailures ?? 0) + 1;
+      if (!hasMixedAnswers) stats.mixedAnswerFailures = (stats.mixedAnswerFailures ?? 0) + 1;
     }
 
     if (
-      new Set(board).size === BOARD_CELLS
-      && seedWords.length === SEED_WORD_COUNT
-      && hasLongFirstSeedBatch(seedWords)
-      && playableBoardAnswers.length >= minPlayableAnswers
-      && hasMixedCoreAnswers(playableBoardAnswers)
+      hasUniqueBoard
+      && hasCompleteSeeds
+      && hasLongSeeds
+      && hasEnoughBoardAnswers
+      && hasMixedAnswers
     ) {
+      const boardAnswerWords = new Set(playableBoardAnswers.map((entry) => entry.word));
+      const playableBonusAnswers = orderPlayableAnswers(
+        findPlayableAnswers(bonusAnswerEntries, board)
+          .filter((entry) => entry.syllables.length >= MIN_ANSWER_SYLLABLES && entry.syllables.length <= MAX_ANSWER_SYLLABLES)
+          .filter((entry) => !boardAnswerWords.has(entry.word)),
+      );
+      if (stats) {
+        stats.maxBonusPlayableAnswers = Math.max(stats.maxBonusPlayableAnswers ?? 0, playableBonusAnswers.length);
+      }
+
       const answerSheet = [
         ...playableBoardAnswers.map((entry, index) => answerMeta(entry.word, index, 'board')),
         ...playableBonusAnswers.map((entry, index) => answerMeta(entry.word, playableBoardAnswers.length + index, 'bonus')),
