@@ -95,7 +95,8 @@ const GOAL_COUNT = 10;
 const MIN_ANSWER_SYLLABLES = 3;
 const MAX_ANSWER_SYLLABLES = 6;
 const MIN_CORE_LONG_ANSWERS = 3;
-const GENERATOR_VERSION = 'malitmot-hourly-v7';
+const MIN_FIRST_SEED_LONG_WORDS = 4;
+const GENERATOR_VERSION = 'malitmot-hourly-v8';
 
 const MIXED_LENGTH_PATTERN = [3, 4, 3, 5, 3, 4, 3, 6, 4, 5];
 
@@ -465,7 +466,19 @@ function hasMixedCoreAnswers(entries) {
   return coreLongAnswerCount >= MIN_CORE_LONG_ANSWERS;
 }
 
-function answerMeta(word, index) {
+function hasLongFirstSeedBatch(seedWords) {
+  if (seedWords.length < SEED_WORD_BATCH_SIZE) return false;
+  const firstSeedBatch = seedWords.slice(0, SEED_WORD_BATCH_SIZE);
+  return firstSeedBatch.filter((entry) => entryLength(entry) >= 4).length >= MIN_FIRST_SEED_LONG_WORDS;
+}
+
+function entriesFromCandidates(candidates) {
+  if (!candidates) return [];
+  if (candidates.length === 0) return [];
+  return typeof candidates[0] === 'string' ? candidateEntries(candidates) : candidates;
+}
+
+function answerMeta(word, index, group = 'board') {
   const syllables = toSyllables(word);
   const tags = [];
   if (syllables.some(hasFinalConsonant)) tags.push('받침');
@@ -476,6 +489,7 @@ function answerMeta(word, index) {
     word,
     order: index,
     type: index < GOAL_COUNT ? 'core' : 'bonus',
+    group,
     syllableCount: syllables.length,
     tags,
   };
@@ -512,8 +526,9 @@ function generatePuzzle(candidates, seed, options = {}) {
     ? candidateEntries(candidates)
     : candidates;
   const answerEntries = options.answerCandidates
-    ? (typeof options.answerCandidates[0] === 'string' ? candidateEntries(options.answerCandidates) : options.answerCandidates)
+    ? entriesFromCandidates(options.answerCandidates)
     : entries;
+  const bonusAnswerEntries = entriesFromCandidates(options.bonusAnswerCandidates);
   const coreEntries = options.coreCandidates
     ? (typeof options.coreCandidates[0] === 'string' ? candidateEntries(options.coreCandidates) : options.coreCandidates)
     : entries;
@@ -565,30 +580,45 @@ function generatePuzzle(candidates, seed, options = {}) {
     }
 
     if (!boardFilled) board = fillBoard(board, syllablePool, rng);
-    const playableAnswers = orderPlayableAnswers(
+    const playableBoardAnswers = orderPlayableAnswers(
       findPlayableAnswers(answerEntries, board)
         .filter((entry) => entry.syllables.length >= MIN_ANSWER_SYLLABLES && entry.syllables.length <= MAX_ANSWER_SYLLABLES),
     );
-    completeSeedWordsFromAnswers(seedWords, usedWords, playableAnswers);
+    const boardAnswerWords = new Set(playableBoardAnswers.map((entry) => entry.word));
+    const playableBonusAnswers = orderPlayableAnswers(
+      findPlayableAnswers(bonusAnswerEntries, board)
+        .filter((entry) => entry.syllables.length >= MIN_ANSWER_SYLLABLES && entry.syllables.length <= MAX_ANSWER_SYLLABLES)
+        .filter((entry) => !boardAnswerWords.has(entry.word)),
+    );
+    completeSeedWordsFromAnswers(seedWords, usedWords, playableBoardAnswers);
     if (stats) {
       stats.completedSeeds = (stats.completedSeeds ?? 0) + 1;
-      stats.maxPlayableAnswers = Math.max(stats.maxPlayableAnswers ?? 0, playableAnswers.length);
+      stats.maxPlayableAnswers = Math.max(stats.maxPlayableAnswers ?? 0, playableBoardAnswers.length);
+      stats.maxBonusPlayableAnswers = Math.max(stats.maxBonusPlayableAnswers ?? 0, playableBonusAnswers.length);
     }
 
     if (
       new Set(board).size === BOARD_CELLS
       && seedWords.length === SEED_WORD_COUNT
-      && playableAnswers.length >= minPlayableAnswers
-      && hasMixedCoreAnswers(playableAnswers)
+      && hasLongFirstSeedBatch(seedWords)
+      && playableBoardAnswers.length >= minPlayableAnswers
+      && hasMixedCoreAnswers(playableBoardAnswers)
     ) {
+      const answerSheet = [
+        ...playableBoardAnswers.map((entry, index) => answerMeta(entry.word, index, 'board')),
+        ...playableBonusAnswers.map((entry, index) => answerMeta(entry.word, playableBoardAnswers.length + index, 'bonus')),
+      ];
+
       return {
         seed,
         generatorVersion: GENERATOR_VERSION,
         board,
         seedWords: seedWords.map((entry) => entry.word),
-        answerSheet: playableAnswers.map((entry, index) => answerMeta(entry.word, index)),
+        answerSheet,
         goalCount: GOAL_COUNT,
-        playableAnswerCount: playableAnswers.length,
+        playableAnswerCount: answerSheet.length,
+        playableBoardAnswerCount: playableBoardAnswers.length,
+        playableBonusAnswerCount: playableBonusAnswers.length,
         generatedAt: new Date().toISOString(),
       };
     }
@@ -613,6 +643,7 @@ const state = {
   entries: [],
   coreEntries: [],
   answerEntries: [],
+  bonusAnswerEntries: [],
   puzzle: null,
   seed: '',
   pendingSeed: '',
@@ -872,6 +903,7 @@ function startCurrentPuzzle() {
   state.pendingSeed = '';
   state.puzzle = generatePuzzle(state.entries, seed, {
     answerCandidates: state.answerEntries,
+    bonusAnswerCandidates: state.bonusAnswerEntries,
     coreCandidates: state.coreEntries,
   });
   state.selectedPath = [];
@@ -995,15 +1027,19 @@ function submitSelection() {
   } else if (!answers.has(word)) {
     state.feedback = `${withTopicParticle(word)} 보드에서 찾을 수 있는 사전 단어가 아니에요.`;
     state.feedbackTone = 'bad';
+  } else if (answers.get(word)?.group === 'bonus' && foundCount() < GOAL_COUNT) {
+    state.feedback = `기본 정답 10개를 찾으면 ${word}도 보너스로 인정돼요.`;
+    state.feedbackTone = 'idle';
   } else if (state.found.has(word)) {
     state.feedback = `${withTopicParticle(word)} 이미 찾았어요.`;
     state.feedbackTone = 'idle';
   } else {
+    const answer = answers.get(word);
     const beforeCount = foundCount();
     state.found.add(word);
     saveFound();
     const afterCount = foundCount();
-    const isBonus = afterCount > GOAL_COUNT;
+    const isBonus = answer.group === 'bonus' || afterCount > GOAL_COUNT;
     const anchor = selectionAnchor();
     state.feedback = isBonus ? `${word} 보너스 정답!` : `${word} 찾았어요.`;
     state.feedbackTone = isBonus ? 'bonus' : 'good';
@@ -1350,7 +1386,8 @@ async function boot() {
         ? state.candidates.coreBoardWords
         : state.candidates.boardWords ?? state.candidates.words,
     );
-    state.answerEntries = candidateEntries(state.candidates.words);
+    state.answerEntries = candidateEntries(state.candidates.boardWords ?? state.candidates.words);
+    state.bonusAnswerEntries = candidateEntries(state.candidates.bonusWords ?? []);
     app.innerHTML = loadingTemplate('문제판을 만드는 중');
     await nextPaint();
 
