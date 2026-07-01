@@ -94,6 +94,7 @@ button {
   display: flex;
   align-items: center;
   min-height: 38px;
+  flex: 0 0 auto;
 }
 
 .icon-button {
@@ -159,9 +160,10 @@ h1 {
   display: flex;
   align-items: center;
   min-height: 38px;
-  font-size: 28px;
+  font-size: 26px;
   line-height: 1;
   letter-spacing: 0;
+  white-space: nowrap;
 }
 
 .timer-group {
@@ -920,6 +922,10 @@ h1 {
   .brand,
   h1 {
     min-height: 34px;
+  }
+
+  h1 {
+    font-size: 22px;
   }
 
   .icon-button {
