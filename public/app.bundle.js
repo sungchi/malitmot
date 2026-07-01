@@ -95,7 +95,7 @@ const GOAL_COUNT = 10;
 const MIN_ANSWER_SYLLABLES = 3;
 const MAX_ANSWER_SYLLABLES = 6;
 const MIN_CORE_LONG_ANSWERS = 3;
-const GENERATOR_VERSION = 'malitmot-hourly-v6';
+const GENERATOR_VERSION = 'malitmot-hourly-v7';
 
 const MIXED_LENGTH_PATTERN = [3, 4, 3, 5, 3, 4, 3, 6, 4, 5];
 
@@ -222,6 +222,7 @@ function pickSeedWord(board, baseOrder, seedWords, usedWords, rng) {
   const preferredLength = MIXED_LENGTH_PATTERN[seedWords.length % MIXED_LENGTH_PATTERN.length];
   const choices = [];
   const offset = Math.floor(rng() * baseOrder.length);
+  const maxChoices = seedWords.length < SEED_WORD_BATCH_SIZE ? 900 : 360;
 
   for (let count = 0; count < baseOrder.length; count += 1) {
     const entry = baseOrder[(offset + count) % baseOrder.length];
@@ -238,7 +239,7 @@ function pickSeedWord(board, baseOrder, seedWords, usedWords, rng) {
     if (!placed) continue;
 
     choices.push({ entry, placed, cost, overlap });
-    if (choices.length >= 220) break;
+    if (choices.length >= maxChoices) break;
   }
 
   if (choices.length === 0) return null;
@@ -255,6 +256,72 @@ function pickSeedWord(board, baseOrder, seedWords, usedWords, rng) {
 
   const window = choices.slice(0, Math.min(18, choices.length));
   return window[Math.floor(rng() * window.length)];
+}
+
+function pickPlayableSeedWord(board, baseOrder, seedWords, usedWords, rng, options = {}) {
+  const requireAffinity = options.requireAffinity ?? true;
+  const affinity = seedAffinity(seedWords);
+  const preferredLength = MIXED_LENGTH_PATTERN[seedWords.length % MIXED_LENGTH_PATTERN.length];
+  const boardSyllables = new Set(board);
+  const choices = [];
+  const offset = Math.floor(rng() * baseOrder.length);
+  const maxChoices = seedWords.length < SEED_WORD_BATCH_SIZE ? 900 : 360;
+
+  for (let count = 0; count < baseOrder.length; count += 1) {
+    const entry = baseOrder[(offset + count) % baseOrder.length];
+    if (usedWords.has(entry.word)) continue;
+
+    const overlap = overlapCount(entry, affinity);
+    if (requireAffinity && affinity && overlap === 0) continue;
+    if (!entry.syllables.every((syllable) => boardSyllables.has(syllable))) continue;
+
+    const path = findPath(board, entry.word);
+    if (!path) continue;
+
+    choices.push({ entry, path, overlap });
+    if (choices.length >= maxChoices) break;
+  }
+
+  if (choices.length === 0) return null;
+
+  choices.sort((a, b) => {
+    const aLengthMatch = entryLength(a.entry) === preferredLength ? 0 : 1;
+    const bLengthMatch = entryLength(b.entry) === preferredLength ? 0 : 1;
+    return aLengthMatch - bLengthMatch
+      || b.overlap - a.overlap
+      || b.entry.frequencyScore - a.entry.frequencyScore
+      || a.entry.word.localeCompare(b.entry.word, 'ko');
+  });
+
+  const window = choices.slice(0, Math.min(18, choices.length));
+  return window[Math.floor(rng() * window.length)];
+}
+
+function completeSeedWordsFromBoard(board, baseOrder, baseCoreOrder, seedWords, usedWords, rng, stats) {
+  while (seedWords.length < SEED_WORD_COUNT) {
+    const seedPool = seedWords.length < SEED_WORD_BATCH_SIZE ? baseCoreOrder : baseOrder;
+    let pick = pickPlayableSeedWord(board, seedPool, seedWords, usedWords, rng);
+    if (!pick) {
+      pick = pickPlayableSeedWord(board, seedPool, seedWords, usedWords, rng, { requireAffinity: false });
+      if (pick && stats) stats.relaxedSeedCompletions = (stats.relaxedSeedCompletions ?? 0) + 1;
+    }
+    if (!pick) break;
+    seedWords.push(pick.entry);
+    usedWords.add(pick.entry.word);
+  }
+
+  return seedWords.length === SEED_WORD_COUNT;
+}
+
+function completeSeedWordsFromAnswers(seedWords, usedWords, playableAnswers) {
+  for (const entry of playableAnswers) {
+    if (seedWords.length >= SEED_WORD_COUNT) break;
+    if (usedWords.has(entry.word)) continue;
+    seedWords.push(entry);
+    usedWords.add(entry.word);
+  }
+
+  return seedWords.length === SEED_WORD_COUNT;
 }
 
 function placeWord(board, entry, rng = Math.random) {
@@ -481,19 +548,29 @@ function generatePuzzle(candidates, seed, options = {}) {
       usedWords.add(pick.entry.word);
     }
 
-    if (seedWords.length !== SEED_WORD_COUNT) {
+    let boardFilled = false;
+    if (seedWords.length !== SEED_WORD_COUNT && seedWords.length >= Math.ceil(SEED_WORD_BATCH_SIZE / 2)) {
+      board = fillBoard(board, syllablePool, rng);
+      boardFilled = true;
+      completeSeedWordsFromBoard(board, baseOrder, baseCoreOrder, seedWords, usedWords, rng, stats);
+    }
+
+    if (seedWords.length < SEED_WORD_BATCH_SIZE) {
       if (stats) {
         stats.seedFailures = (stats.seedFailures ?? 0) + 1;
         stats.maxSeedWords = Math.max(stats.maxSeedWords ?? 0, seedWords.length);
+        stats.failedSeedLengths ??= [];
+        stats.failedSeedLengths.push(seedWords.length);
       }
       continue;
     }
 
-    board = fillBoard(board, syllablePool, rng);
+    if (!boardFilled) board = fillBoard(board, syllablePool, rng);
     const playableAnswers = orderPlayableAnswers(
       findPlayableAnswers(answerEntries, board)
         .filter((entry) => entry.syllables.length >= MIN_ANSWER_SYLLABLES && entry.syllables.length <= MAX_ANSWER_SYLLABLES),
     );
+    completeSeedWordsFromAnswers(seedWords, usedWords, playableAnswers);
     if (stats) {
       stats.completedSeeds = (stats.completedSeeds ?? 0) + 1;
       stats.maxPlayableAnswers = Math.max(stats.maxPlayableAnswers ?? 0, playableAnswers.length);
@@ -501,6 +578,7 @@ function generatePuzzle(candidates, seed, options = {}) {
 
     if (
       new Set(board).size === BOARD_CELLS
+      && seedWords.length === SEED_WORD_COUNT
       && playableAnswers.length >= minPlayableAnswers
       && hasMixedCoreAnswers(playableAnswers)
     ) {
@@ -558,6 +636,14 @@ function loadingTemplate(message = '게임 보드를 만드는 중') {
       </section>
     </main>
   `;
+}
+
+function nextPaint() {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.setTimeout(resolve, 0);
+    });
+  });
 }
 
 function enableAdBanner() {
@@ -1187,7 +1273,13 @@ function render() {
 
 async function boot() {
   try {
+    app.innerHTML = loadingTemplate('게임 보드를 만드는 중');
+    await nextPaint();
+
     state.candidates = await loadCandidates();
+    app.innerHTML = loadingTemplate('단어 후보를 정리하는 중');
+    await nextPaint();
+
     state.entries = candidateEntries(state.candidates.boardWords ?? state.candidates.words);
     state.coreEntries = candidateEntries(
       state.candidates.coreDeployable && state.candidates.coreBoardWords?.length
@@ -1195,6 +1287,9 @@ async function boot() {
         : state.candidates.boardWords ?? state.candidates.words,
     );
     state.answerEntries = candidateEntries(state.candidates.words);
+    app.innerHTML = loadingTemplate('문제판을 만드는 중');
+    await nextPaint();
+
     state.helpOpen = !hasSeenHelp();
     startCurrentPuzzle();
     enableAdBanner();
