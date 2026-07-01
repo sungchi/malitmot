@@ -48,6 +48,10 @@ body {
   background: var(--soft);
 }
 
+.ad-banner[hidden] {
+  display: none;
+}
+
 .ad-banner a,
 .ad-banner img {
   display: block;
@@ -602,6 +606,36 @@ h1 {
   text-align: center;
 }
 
+.loading-shell {
+  min-height: 100svh;
+  justify-content: center;
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.loading-content h1 {
+  margin: 0;
+  min-height: auto;
+  font-size: 44px;
+  font-weight: 950;
+  line-height: 0.95;
+}
+
+.loading-message {
+  margin: 0;
+  color: var(--muted);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.4;
+  animation: loadingBlink 900ms ease-in-out infinite;
+}
+
 .error h1 {
   margin-bottom: 10px;
   font-size: 22px;
@@ -832,6 +866,23 @@ h1 {
   100% {
     opacity: 0;
     transform: translate(-50%, 8px);
+  }
+}
+
+@keyframes loadingBlink {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-message {
+    animation: none;
   }
 }
 

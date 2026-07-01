@@ -95,7 +95,7 @@ const GOAL_COUNT = 10;
 const MIN_ANSWER_SYLLABLES = 3;
 const MAX_ANSWER_SYLLABLES = 6;
 const MIN_CORE_LONG_ANSWERS = 3;
-const GENERATOR_VERSION = 'malitmot-hourly-v4';
+const GENERATOR_VERSION = 'malitmot-hourly-v6';
 
 const MIXED_LENGTH_PATTERN = [3, 4, 3, 5, 3, 4, 3, 6, 4, 5];
 
@@ -232,7 +232,7 @@ function pickSeedWord(board, baseOrder, seedWords, usedWords, rng) {
 
     const { cost, total } = addCost(board, entry);
     if (total > BOARD_CELLS) continue;
-    if (cost > 4 && seedWords.length > 4) continue;
+    if (cost > 5 && seedWords.length > 4) continue;
 
     const placed = placeWord(board, entry, rng);
     if (!placed) continue;
@@ -448,23 +448,32 @@ function generatePuzzle(candidates, seed, options = {}) {
   const answerEntries = options.answerCandidates
     ? (typeof options.answerCandidates[0] === 'string' ? candidateEntries(options.answerCandidates) : options.answerCandidates)
     : entries;
-  const placementLimit = options.placementLimit ?? 25000;
+  const coreEntries = options.coreCandidates
+    ? (typeof options.coreCandidates[0] === 'string' ? candidateEntries(options.coreCandidates) : options.coreCandidates)
+    : entries;
+  const placementLimit = options.placementLimit ?? entries.length;
+  const stats = options.stats;
   const placementPool = entries
+    .slice(0, placementLimit)
+    .filter((entry) => entry.syllables.length >= MIN_ANSWER_SYLLABLES && entry.syllables.length <= MAX_ANSWER_SYLLABLES);
+  const corePlacementPool = coreEntries
     .slice(0, placementLimit)
     .filter((entry) => entry.syllables.length >= MIN_ANSWER_SYLLABLES && entry.syllables.length <= MAX_ANSWER_SYLLABLES);
   const syllablePool = entries.filter((entry) => entry.syllables.length <= BOARD_CELLS);
   const minPlayableAnswers = options.minPlayableAnswers ?? MIN_PLAYABLE_ANSWERS;
-  const maxAttempts = options.maxAttempts ?? 140;
-  const rng = createRng(`${seed}:${GENERATOR_VERSION}`);
-  const baseOrder = shuffle(placementPool, rng);
-
+  const maxAttempts = options.maxAttempts ?? 300;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    if (stats) stats.attempts = (stats.attempts ?? 0) + 1;
+    const rng = createRng(`${seed}:${GENERATOR_VERSION}:${attempt}`);
+    const baseCoreOrder = shuffle(corePlacementPool, rng);
+    const baseOrder = shuffle(placementPool, rng);
     let board = Array(BOARD_CELLS).fill(null);
     const seedWords = [];
     const usedWords = new Set();
 
     while (seedWords.length < SEED_WORD_COUNT) {
-      const pick = pickSeedWord(board, baseOrder, seedWords, usedWords, rng);
+      const seedPool = seedWords.length < SEED_WORD_BATCH_SIZE ? baseCoreOrder : baseOrder;
+      const pick = pickSeedWord(board, seedPool, seedWords, usedWords, rng);
       if (!pick) break;
 
       board = pick.placed.board;
@@ -472,13 +481,23 @@ function generatePuzzle(candidates, seed, options = {}) {
       usedWords.add(pick.entry.word);
     }
 
-    if (seedWords.length !== SEED_WORD_COUNT) continue;
+    if (seedWords.length !== SEED_WORD_COUNT) {
+      if (stats) {
+        stats.seedFailures = (stats.seedFailures ?? 0) + 1;
+        stats.maxSeedWords = Math.max(stats.maxSeedWords ?? 0, seedWords.length);
+      }
+      continue;
+    }
 
     board = fillBoard(board, syllablePool, rng);
     const playableAnswers = orderPlayableAnswers(
       findPlayableAnswers(answerEntries, board)
         .filter((entry) => entry.syllables.length >= MIN_ANSWER_SYLLABLES && entry.syllables.length <= MAX_ANSWER_SYLLABLES),
     );
+    if (stats) {
+      stats.completedSeeds = (stats.completedSeeds ?? 0) + 1;
+      stats.maxPlayableAnswers = Math.max(stats.maxPlayableAnswers ?? 0, playableAnswers.length);
+    }
 
     if (
       new Set(board).size === BOARD_CELLS
@@ -505,12 +524,15 @@ function generatePuzzle(candidates, seed, options = {}) {
 /* src/app.js */
 
 const app = document.querySelector('#app');
+const adBanner = document.querySelector('[data-ad-banner]');
 const HELP_STORAGE_KEY = 'malitmot:help:v1:seen';
 const SHARE_URL = 'https://plan9.kr/malitmot';
+let adBannerEnabled = false;
 
 const state = {
   candidates: [],
   entries: [],
+  coreEntries: [],
   answerEntries: [],
   puzzle: null,
   seed: '',
@@ -526,6 +548,33 @@ const state = {
   helpOpen: false,
   foundOpen: false,
 };
+
+function loadingTemplate(message = '게임 보드를 만드는 중') {
+  return `
+    <main class="shell loading-shell" aria-busy="true" aria-live="polite">
+      <section class="loading-content">
+        <h1>말잇못</h1>
+        <p class="loading-message">${message}<span aria-hidden="true">···</span></p>
+      </section>
+    </main>
+  `;
+}
+
+function enableAdBanner() {
+  if (adBannerEnabled || !adBanner) return;
+
+  const image = adBanner.querySelector('img[data-src]');
+  image?.addEventListener('error', () => {
+    adBanner.hidden = true;
+  }, { once: true });
+
+  if (image?.dataset.src && !image.hasAttribute('src')) {
+    image.src = image.dataset.src;
+  }
+
+  adBanner.hidden = false;
+  adBannerEnabled = true;
+}
 
 async function loadCandidates() {
   const payload = globalThis.MALITMOT_WORDS_PAYLOAD;
@@ -673,7 +722,10 @@ function startCurrentPuzzle() {
 
   state.seed = seed;
   state.pendingSeed = '';
-  state.puzzle = generatePuzzle(state.entries, seed, { answerCandidates: state.answerEntries });
+  state.puzzle = generatePuzzle(state.entries, seed, {
+    answerCandidates: state.answerEntries,
+    coreCandidates: state.coreEntries,
+  });
   state.selectedPath = [];
   state.pointerActive = false;
   state.pointer = null;
@@ -1023,7 +1075,7 @@ function foundDialog(found) {
 
 function render() {
   if (!state.puzzle) {
-    app.innerHTML = '<main class="shell"><p class="loading">문제판을 만드는 중입니다.</p></main>';
+    app.innerHTML = loadingTemplate();
     return;
   }
 
@@ -1135,12 +1187,17 @@ function render() {
 
 async function boot() {
   try {
-    app.innerHTML = '<main class="shell"><p class="loading">단어 후보를 불러오는 중입니다.</p></main>';
     state.candidates = await loadCandidates();
     state.entries = candidateEntries(state.candidates.boardWords ?? state.candidates.words);
+    state.coreEntries = candidateEntries(
+      state.candidates.coreDeployable && state.candidates.coreBoardWords?.length
+        ? state.candidates.coreBoardWords
+        : state.candidates.boardWords ?? state.candidates.words,
+    );
     state.answerEntries = candidateEntries(state.candidates.words);
     state.helpOpen = !hasSeenHelp();
     startCurrentPuzzle();
+    enableAdBanner();
     window.setInterval(renderTimer, 1000);
     window.addEventListener('resize', renderLines);
     window.addEventListener('keydown', handleKeydown);
