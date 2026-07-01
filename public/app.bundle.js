@@ -651,16 +651,24 @@ function enableAdBanner() {
   if (adBannerEnabled || !adBanner) return;
 
   const image = adBanner.querySelector('img[data-src]');
+  if (!image) return;
+
+  const showLoadedAd = () => {
+    if (!image.naturalWidth) return;
+    adBanner.hidden = false;
+    adBannerEnabled = true;
+  };
+
   image?.addEventListener('error', () => {
     adBanner.hidden = true;
   }, { once: true });
+  image.addEventListener('load', showLoadedAd, { once: true });
 
   if (image?.dataset.src && !image.hasAttribute('src')) {
     image.src = image.dataset.src;
   }
 
-  adBanner.hidden = false;
-  adBannerEnabled = true;
+  if (image.complete) showLoadedAd();
 }
 
 function loadConfetti() {
