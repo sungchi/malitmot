@@ -652,6 +652,8 @@ function enableAdBanner() {
 
   const image = adBanner.querySelector('img[data-src]');
   if (!image) return;
+  const source = image.dataset.src;
+  if (!source) return;
 
   const showLoadedAd = () => {
     if (!image.naturalWidth) return;
@@ -664,8 +666,9 @@ function enableAdBanner() {
   }, { once: true });
   image.addEventListener('load', showLoadedAd, { once: true });
 
-  if (image?.dataset.src && !image.hasAttribute('src')) {
-    image.src = image.dataset.src;
+  image.loading = 'eager';
+  if (!image.hasAttribute('src')) {
+    image.src = source;
   }
 
   if (image.complete) showLoadedAd();
