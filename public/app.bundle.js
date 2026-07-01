@@ -605,7 +605,9 @@ const app = document.querySelector('#app');
 const adBanner = document.querySelector('[data-ad-banner]');
 const HELP_STORAGE_KEY = 'malitmot:help:v1:seen';
 const SHARE_URL = 'https://plan9.kr/malitmot';
+const CONFETTI_SCRIPT_URL = './public/vendor/canvas-confetti.browser.min.js?v=1.9.4';
 let adBannerEnabled = false;
+let confettiPromise = null;
 
 const state = {
   candidates: [],
@@ -660,6 +662,56 @@ function enableAdBanner() {
 
   adBanner.hidden = false;
   adBannerEnabled = true;
+}
+
+function loadConfetti() {
+  if (typeof globalThis.confetti === 'function') return Promise.resolve(globalThis.confetti);
+  if (confettiPromise) return confettiPromise;
+
+  confettiPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = CONFETTI_SCRIPT_URL;
+    script.async = true;
+    script.crossOrigin = 'anonymous';
+    script.onload = () => {
+      if (typeof globalThis.confetti === 'function') resolve(globalThis.confetti);
+      else reject(new Error('confetti library did not load'));
+    };
+    script.onerror = () => reject(new Error('confetti library failed to load'));
+    document.head.append(script);
+  }).catch(() => null);
+
+  return confettiPromise;
+}
+
+function goalConfettiOrigin() {
+  const board = document.querySelector('.board-wrap');
+  if (!board) return { x: 0.5, y: 0.45 };
+
+  const rect = board.getBoundingClientRect();
+  return {
+    x: Math.min(0.9, Math.max(0.1, (rect.left + rect.width / 2) / window.innerWidth)),
+    y: Math.min(0.82, Math.max(0.12, (rect.top + rect.height * 0.42) / window.innerHeight)),
+  };
+}
+
+function launchGoalConfetti() {
+  loadConfetti().then((confetti) => {
+    if (!confetti) return;
+    const origin = goalConfettiOrigin();
+    const shared = {
+      disableForReducedMotion: true,
+      ticks: 180,
+      scalar: 0.95,
+      zIndex: 20,
+    };
+
+    confetti({ ...shared, particleCount: 80, spread: 68, startVelocity: 32, origin });
+    window.setTimeout(() => {
+      confetti({ ...shared, particleCount: 36, angle: 60, spread: 55, origin: { x: 0.12, y: origin.y } });
+      confetti({ ...shared, particleCount: 36, angle: 120, spread: 55, origin: { x: 0.88, y: origin.y } });
+    }, 140);
+  });
 }
 
 async function loadCandidates() {
@@ -937,6 +989,7 @@ function submitSelection() {
     state.feedback = `${withTopicParticle(word)} 이미 찾았어요.`;
     state.feedbackTone = 'idle';
   } else {
+    const beforeCount = foundCount();
     state.found.add(word);
     saveFound();
     const afterCount = foundCount();
@@ -946,6 +999,7 @@ function submitSelection() {
     state.feedbackTone = isBonus ? 'bonus' : 'good';
     state.burst = { word, isBonus, id: Date.now(), ...anchor };
     playSuccessHaptic(isBonus);
+    if (beforeCount < GOAL_COUNT && afterCount >= GOAL_COUNT) launchGoalConfetti();
   }
 
   clearSelection();
