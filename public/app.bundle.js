@@ -168,10 +168,9 @@ function secondsUntilNextHour(date = new Date()) {
 }
 
 function formatDuration(totalSeconds) {
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  return [hours, minutes, seconds].map((part) => String(part).padStart(2, '0')).join(':');
+  return [minutes, seconds].map((part) => String(part).padStart(2, '0')).join(':');
 }
 
 function filledSyllables(board) {
