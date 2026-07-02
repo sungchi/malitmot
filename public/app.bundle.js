@@ -678,6 +678,8 @@ const adBanner = document.querySelector('[data-ad-banner]');
 const HELP_STORAGE_KEY = 'malitmot:help:v1:seen';
 const SHARE_URL = 'https://plan9.kr/malitmot';
 const CONFETTI_SCRIPT_URL = './public/vendor/canvas-confetti.browser.min.js?v=1.9.4';
+const TILE_LOCK_INSET_RATIO = 0.14;
+const MIN_TILE_LOCK_HITBOX_SIZE = 44;
 let adBannerEnabled = false;
 let confettiPromise = null;
 
@@ -1095,9 +1097,27 @@ function submitSelection() {
   render();
 }
 
+function tileHitboxInset(size) {
+  return Math.max(
+    0,
+    Math.min(size * TILE_LOCK_INSET_RATIO, (size - MIN_TILE_LOCK_HITBOX_SIZE) / 2),
+  );
+}
+
 function tileFromPoint(clientX, clientY) {
   const element = document.elementFromPoint(clientX, clientY);
-  return element?.closest?.('[data-cell]');
+  const tile = element?.closest?.('[data-cell]');
+  if (!tile) return null;
+
+  const rect = tile.getBoundingClientRect();
+  const insetX = tileHitboxInset(rect.width);
+  const insetY = tileHitboxInset(rect.height);
+  const insideLockHitbox = clientX >= rect.left + insetX
+    && clientX <= rect.right - insetX
+    && clientY >= rect.top + insetY
+    && clientY <= rect.bottom - insetY;
+
+  return insideLockHitbox ? tile : null;
 }
 
 function handlePointerMove(event) {
