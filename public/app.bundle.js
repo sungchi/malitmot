@@ -101,6 +101,36 @@ const GENERATOR_VERSION = 'malitmot-hourly-v9';
 
 const MIXED_LENGTH_PATTERN = [3, 4, 3, 5, 3, 4, 3, 6, 4, 5];
 
+function evaluateAnswerSubmission({
+  word,
+  answers,
+  foundWords,
+  goalCount = GOAL_COUNT,
+  minAnswerSyllables = MIN_ANSWER_SYLLABLES,
+  maxAnswerSyllables = MAX_ANSWER_SYLLABLES,
+}) {
+  const syllableCount = toSyllables(word).length;
+
+  if (syllableCount < minAnswerSyllables || syllableCount > maxAnswerSyllables) {
+    return { status: 'invalid-length' };
+  }
+
+  if (!answers.has(word)) {
+    return { status: 'not-found' };
+  }
+
+  if (foundWords.has(word)) {
+    return { status: 'duplicate' };
+  }
+
+  const afterCount = foundWords.size + 1;
+  return {
+    status: 'accepted',
+    afterCount,
+    isBonus: afterCount > goalCount,
+  };
+}
+
 const NEIGHBORS = Array.from({ length: BOARD_CELLS }, (_, index) => {
   const row = Math.floor(index / BOARD_SIZE);
   const col = index % BOARD_SIZE;
@@ -1065,26 +1095,27 @@ function submitSelection() {
 
   const word = currentWord();
   const answers = answerMap();
+  const submission = evaluateAnswerSubmission({
+    word,
+    answers,
+    foundWords: state.found,
+  });
 
-  if (word.length < MIN_ANSWER_SYLLABLES || word.length > MAX_ANSWER_SYLLABLES) {
+  if (submission.status === 'invalid-length') {
     state.feedback = `${MIN_ANSWER_SYLLABLES}~${MAX_ANSWER_SYLLABLES}음절 단어를 이어주세요.`;
     state.feedbackTone = 'bad';
-  } else if (!answers.has(word)) {
+  } else if (submission.status === 'not-found') {
     state.feedback = `${withTopicParticle(word)} 보드에서 찾을 수 있는 사전 단어가 아니에요.`;
     state.feedbackTone = 'bad';
-  } else if (answers.get(word)?.group === 'bonus' && foundCount() < GOAL_COUNT) {
-    state.feedback = `기본 정답 10개를 찾으면 ${word}도 보너스로 인정돼요.`;
-    state.feedbackTone = 'idle';
-  } else if (state.found.has(word)) {
+  } else if (submission.status === 'duplicate') {
     state.feedback = `${withTopicParticle(word)} 이미 찾았어요.`;
     state.feedbackTone = 'idle';
   } else {
-    const answer = answers.get(word);
     const beforeCount = foundCount();
     state.found.add(word);
     saveFound();
-    const afterCount = foundCount();
-    const isBonus = answer.group === 'bonus' || afterCount > GOAL_COUNT;
+    const afterCount = submission.afterCount;
+    const isBonus = submission.isBonus;
     const anchor = selectionAnchor();
     state.feedback = isBonus ? `${word} 보너스 정답!` : `${word} 찾았어요.`;
     state.feedbackTone = isBonus ? 'bonus' : 'good';
@@ -1293,7 +1324,7 @@ function helpDialog() {
           <li>상하좌우와 대각선으로 붙은 글자를 이어요.</li>
           <li>한 단어 안에서 같은 칸은 한 번만 쓸 수 있어요.</li>
           <li>3~6음절, 사전에 있는 단어만 정답이에요.</li>
-          <li>10개를 찾으면 목표 달성, 이후 정답은 보너스로 쌓여요.</li>
+          <li>정답은 바로 인정되고, 10개 이후부터 보너스로 쌓여요.</li>
           <li>한 시간마다 새 판이 준비되고, 원할 때 시작할 수 있어요.</li>
         </ul>
         <button type="button" class="primary-button" data-close-help>시작하기</button>
